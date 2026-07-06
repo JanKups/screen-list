@@ -39,8 +39,11 @@ batch where noted.
    and unchecks any exclusion to keep.
 5. **Auth probe + setup** per [references/auth-setup.md](references/auth-setup.md):
    probe each part for an auth wall, then run the strategy Q&A (`none` /
-   `credentials` / `manual-session` / `header`). Write secrets to
-   `.screenshots-auth/secrets.env`, never into the config.
+   `credentials` / `manual-session` / `header`). Ask for env-var **names**, never
+   the secret values themselves. Write a `.screenshots-auth/secrets.env` template
+   with the named keys left **blank** (`SR_WEB_PASSWORD=`) and have the **user**
+   fill in the actual values — never solicit or type a secret into the config or
+   your own output.
 6. **Propose the output location** (default `screenshots/` at repo root) and
    confirm before creating it.
 7. **Scaffold the folder** by copying everything from `assets/` into it —
@@ -96,6 +99,9 @@ batch where noted.
   only on approval.
 - **Secrets never go in the config file** — only env-var *names*. Secrets live in
   `.screenshots-auth/` (gitignored).
+- **Never handle secret values yourself.** Ask only for env-var *names*; write a
+  blank-valued `secrets.env` template and have the user fill in the actual
+  values. A password must never pass through your output or the conversation.
 - **Stop only servers this run started.**
 - **Unconfigured auth gate** → capture the public routes, flag the gated ones in
   the gallery; never silently drop them.

@@ -296,6 +296,11 @@ async function ensureServer(spec, repoRoot, logsDir) {
 	// polled from the url. detached:true gives the child its own process group so
 	// process.kill(-pid) tears down the whole tree (e.g. `pnpm dev` children).
 	const logFh = await fs.open(logPath, "a");
+	// shell:true is required to run the user's own dev-server command (e.g.
+	// `pnpm dev`) verbatim. `command` comes only from the local, user-authored
+	// screenshots.config.jsonc — no untrusted/remote input reaches here — so the
+	// "shell access" flag some supply-chain scanners raise is a known false
+	// positive (see README "Security & scanner notes").
 	const child = spawn(command, { cwd: runCwd, shell: true, detached: true, stdio: ["ignore", logFh.fd, logFh.fd] });
 	const entry = { name, child, pgid: child.pid };
 	startedServers.push(entry);
