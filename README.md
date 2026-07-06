@@ -85,3 +85,5 @@ The skill ships with its own eval harness: five scenarios against real fixture a
 I'm [Jan Kuppens](https://kups.nl). I run [Kups](https://kups.nl), an AI-first studio for digital product design and development: prototypes, MVPs, web apps, and AI tools, from first idea to launch. This skill came out of my own review loop. I dictate comments into the gallery and feed the export straight into the next agent session.
 
 Questions or ideas: [kups.nl](https://kups.nl).
+
+Licensed under [MIT](LICENSE).
