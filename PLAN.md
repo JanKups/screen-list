@@ -121,7 +121,7 @@ JSONC (comments + trailing commas). Parsed by a ~20-line comment-stripper inside
       "name": "admin",
       "dir": "apps/admin",           // relative to repo root
       "server": {
-        "url": "http://localhost:3002",
+        "url": "http://localhost:4000",
         "command": "pnpm dev",       // run in `dir` if port not already up
         "cwd": null,                 // override command cwd (default: dir)
         "readyTimeoutMs": 60000,
@@ -129,9 +129,9 @@ JSONC (comments + trailing commas). Parsed by a ~20-line comment-stripper inside
       },
       "companions": [                // started (if not up) BEFORE the part server
         {
-          "name": "convex",
-          "command": "npx convex dev",
-          "cwd": "packages/backend",
+          "name": "api",
+          "command": "npm run dev",
+          "cwd": "packages/api",
           "readyPattern": "ready",
           "url": null                // poll url OR match readyPattern
         }
@@ -333,14 +333,14 @@ Change:
 2. **Neutral copy:** placeholder "Comment on this screen…"; header hint "focus a field → type or dictate → Cmd+Enter for next". No dictation framing.
 3. **localStorage key:** `sr:<config.project>:v1`.
 4. **Gated rows [architect's call]:** routes with manifest `status: "gated"` render as a full-width row with an amber left border, a 🔒 badge, the route path, the reason, and the remedy command in a copyable `<code>` block — **with a comment field** (reviewer can still note "must see this before ship"). They count separately in the header: "42 screens · 3 gated". `status: "error"` rows same treatment in red with the error message.
-5. **Style:** keep the dark theme; swap the Preventieschool coral accent for a neutral indigo; add a stale-gallery hint if >50% of images fail to load (fresh clone case).
+5. **Style:** keep the dark theme; swap the source gallery's coral accent for a neutral indigo; add a stale-gallery hint if >50% of images fail to load (fresh clone case).
 6. Export unchanged in shape; `COMMENTS.md` sections become `## part / route-name` with the route path in the heading.
 
 ---
 
 ## 10. Eval plan (skill-creator method)
 
-Fixtures (in `workspace/`, throwaway, NOT preventieschool):
+Fixtures (in `workspace/`, throwaway apps, never a real private project):
 1. **`next-fixture`** — `create-next-app` (App Router) + added: one dynamic route (`/posts/[id]`), one route group, a fake `/login` page + middleware cookie-gate on `/dashboard`, an `api/` route and an auth callback (exclusion bait).
 2. **`vite-fixture`** — Vite + react-router (code-defined routes) — exercises the no-fs-router fallback. (Astro starter as a stretch third.)
 
