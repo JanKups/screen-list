@@ -1,5 +1,5 @@
 // Code-defined routes — no filesystem router. This is the shape that
-// screenshot-review-web's route discovery cannot crawl from the directory tree
+// screen-list's route discovery cannot crawl from the directory tree
 // (PLAN.md §6.2, "Vite SPA, no fs-router" row): it must either best-effort grep
 // these `path:` strings out of the source, or fall back to asking the user.
 import { createBrowserRouter } from "react-router-dom";

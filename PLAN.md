@@ -1,4 +1,4 @@
-# Architectural plan: `screenshot-review-web`
+# Architectural plan: `screen-list`
 
 **Status:** plan for review — nothing built yet (per Jan's hold-off).
 **Inputs:** locked design record (`project_screenshot_review_web_skill.md`, 10 decisions) + handoff doc (2026-07-06). Where this plan makes a call the design left open, it is marked **[architect's call]**.
@@ -10,7 +10,7 @@ A public, standalone Claude Code skill that, dropped into any web project, detec
 ## 1. Repository layout (build workspace)
 
 ```
-~/dev/screenshot-review-web/
+~/dev/screen-list/
 ├── PLAN.md                      ← this document
 ├── skill/                       ← the shipped skill (what gets packaged)
 │   ├── SKILL.md
@@ -67,7 +67,7 @@ Target: body ≤ ~150 lines; per-framework and per-auth detail pushed to `refere
 
 ```
 ---
-name: screenshot-review-web
+name: screen-list
 description: <drafted during build; optimized via skill-creator's description loop.
   Working draft: "Screenshot every route of a web app (Next.js, Remix, SvelteKit,
   Astro, Vite) into a comment-review gallery. Detects monorepo parts, dev servers,
@@ -360,8 +360,8 @@ Graders are node scripts: file-tree assertions, config-schema validation, PNG ex
 ## 11. Packaging & install
 
 1. Build loop per skill-creator: draft → run evals → iterate → description-optimization loop (finalize the frontmatter description here, per handoff open item).
-2. `package_skill.py skill/` → `screenshot-review-web.skill`.
-3. Install: unpack to `~/.claude/skills/screenshot-review-web/`; smoke-test trigger phrases ("screenshot my app", "make a review gallery of all screens") + non-trigger phrases (mobile app screenshots → should NOT fire; the `-web` suffix and description wording guard this).
+2. `package_skill.py skill/` → `screen-list.skill`.
+3. Install: unpack to `~/.claude/skills/screen-list/`; smoke-test trigger phrases ("screenshot my app", "make a review gallery of all screens") + non-trigger phrases (mobile app screenshots → should NOT fire; the `-web` suffix and description wording guard this).
 
 ---
 

@@ -5,7 +5,7 @@ export function Home() {
 		<main>
 			<h1>vite-fixture</h1>
 			<p>
-				Reproducible Vite + react-router SPA fixture for screenshot-review-web
+				Reproducible Vite + react-router SPA fixture for screen-list
 				evals. Routes are defined in code (<code>createBrowserRouter</code>),
 				not on the filesystem.
 			</p>

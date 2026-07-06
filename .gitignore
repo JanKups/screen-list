@@ -7,7 +7,7 @@
 
 # Packaged skill artifact — rebuild with:
 #   python -m scripts.package_skill <this-repo>/skill  (from the skill-creator skill dir)
-# then rename skill.skill → screenshot-review-web.skill (packager names by folder).
+# then rename skill.skill → screen-list.skill (packager names by folder).
 *.skill
 
 # macOS cruft

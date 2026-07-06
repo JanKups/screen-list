@@ -1,6 +1,6 @@
 # Eval harness (E1–E5)
 
-Scripted, reproducible evals for the `screenshot-review-web` skill (PLAN.md §10,
+Scripted, reproducible evals for the `screen-list` skill (PLAN.md §10,
 issue #9). Every pass/fail verdict comes from a **node grader** — no human
 judgment, no LLM in the pass/fail path.
 
