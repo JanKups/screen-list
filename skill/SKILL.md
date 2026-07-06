@@ -1,6 +1,6 @@
 ---
 name: screenshot-review-web
-description: 'Screenshot every route of a web app (Next.js, Remix, SvelteKit, Astro, Vite) into a comment-review gallery. Detects monorepo parts, dev servers, auth walls, and dynamic routes; captures desktop+mobile full-page shots; generates an HTML review sheet exporting COMMENTS.md. Use when the user wants screenshots of their web app, a visual review pass, a screenshot gallery, or to review all screens.'
+description: 'Use when someone wants to visually review or capture their running web app across many pages at once — for design QA, a pre-launch or pre-demo look-over, a redesign or restyle check, or handing screens to a designer for feedback. Triggers on requests to screenshot, capture, or grab shots of every route/page/view/screen of a site or app (Next.js, Remix, React Router, SvelteKit, Astro, Vite, or a monorepo of apps) and collect them into one scrollable gallery to browse and comment on — typically full-page, at desktop and mobile widths, including dynamic routes and auth-gated pages. Not for single-page screenshots, component/Storybook shots, native iOS/Android/Expo app captures, Figma exports, terminal captures, or visual-diff regression tests.'
 ---
 
 # screenshot-review-web
