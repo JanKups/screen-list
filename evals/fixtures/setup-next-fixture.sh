@@ -10,7 +10,7 @@
 #
 # WHAT IT BUILDS
 #   A Next.js App Router app (create-next-app, pinned) plus fixture routes that
-#   bait screenshot-review-web's route discovery (PLAN.md §6.2):
+#   bait screen-list's route discovery (PLAN.md §6.2):
 #     /                      — home with nav links
 #     /posts/[id]            — dynamic route (visibly different content per id)
 #     /about                 — lives in the (marketing) route group; the group

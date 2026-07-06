@@ -4,7 +4,7 @@ export default function Home() {
   return (
     <main style={{ padding: 40, fontFamily: "system-ui, sans-serif" }}>
       <h1>next-fixture</h1>
-      <p>Reproducible Next.js App Router fixture for screenshot-review-web evals.</p>
+      <p>Reproducible Next.js App Router fixture for screen-list evals.</p>
       <ul>
         <li>
           <Link href="/posts/hello-world">/posts/hello-world</Link> (dynamic route)

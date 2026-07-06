@@ -1,4 +1,4 @@
-# screenshot-review-web
+# screen-list
 
 A Claude Code skill that screenshots every page of your web app and turns them into a gallery you can comment on, then hands your comments back to the agent as a to-do list.
 
@@ -32,8 +32,8 @@ The export is the point. You look at the app once, write down what's wrong, and 
 ## Quickstart
 
 ```bash
-git clone https://github.com/JanKups/screenshot-review-web.git
-cp -r screenshot-review-web/skill ~/.claude/skills/screenshot-review-web
+git clone https://github.com/JanKups/screen-list.git
+cp -r screen-list/skill ~/.claude/skills/screen-list
 ```
 
 Then in Claude Code, in any web project:
