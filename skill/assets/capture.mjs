@@ -1028,20 +1028,12 @@ function printReport(matrix, results, wallMs) {
 	console.log("=".repeat(52));
 }
 
-// §5.9: attempt generate.mjs unless --no-gallery. It is still a placeholder in
-// this repo, so detect that and skip gracefully with a note (SEAM: remove the
-// placeholder check once generate.mjs is real).
+// §5.9: build the gallery via generate.mjs unless --no-gallery.
 async function runGallery(noGallery) {
 	if (noGallery) return;
 	const gen = "generate.mjs";
-	let src;
-	try { src = await fs.readFile(gen, "utf8"); } catch {
-		console.log(`\nNote: ${gen} not found — skipping gallery. Run it once implemented.`);
-		return;
-	}
-	if (/placeholder stub|Not yet written/i.test(src)) {
-		console.log(`\nNote: ${gen} is still a placeholder — skipping gallery generation.`);
-		console.log("      Once it's implemented, capture will build gallery.html automatically.");
+	try { await fs.access(gen); } catch {
+		console.log(`\nNote: ${gen} not found — skipping gallery. Open gallery.html manually once available.`);
 		return;
 	}
 	console.log("\nGenerating gallery…");
