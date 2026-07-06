@@ -743,9 +743,9 @@ function globMatch(glob, str) {
 		"^" +
 			glob
 				.replace(/[.+^${}()|\\]/g, "\\$&")
-				.replace(/\*\*/g, " ")
+				.replace(/\*\*/g, "\u0000")
 				.replace(/\*/g, "[^/]*")
-				.replace(/ /g, ".*")
+				.replace(/\u0000/g, ".*")
 				.replace(/\?/g, ".") +
 			"$",
 	);
@@ -948,7 +948,7 @@ function isPartialRun(opts) {
 
 async function writeManifest(results, opts) {
 	const partial = isPartialRun(opts);
-	const key = (part, routePath) => `${part} ${routePath}`;
+	const key = (part, routePath) => `${part}\u0000${routePath}`;
 	const old = await readManifest();
 	const oldByKey = new Map(old.runs.map((r) => [key(r.part, r.route), r]));
 	const touched = new Set(results.map((r) => key(r.part, r.path)));
