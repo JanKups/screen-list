@@ -44,6 +44,22 @@ No login. Omit the `auth` block entirely, or:
 
 Nothing in `secrets.env`. All routes capture as public.
 
+**Exception — a wall was detected but the user declined to set it up.** Do *not*
+drop to a bare `none` block here. Without a `gateSignal`, `capture.mjs` can't tell
+a gated route apart from a real page: it follows the redirect and silently
+screenshots the *login page* under the gated route's name, recording it `ok`. That
+violates the hard rule "unconfigured auth gate → flag the gated ones, never
+silently drop." Keep the `gateSignal` you derived in the probe (and mark the
+walled routes `auth: true`) so the bounce is caught and the route is recorded
+**gated** with a `--login` remedy:
+
+```jsonc
+"auth": {
+  "strategy": "none",
+  "gateSignal": { "urlMatching": "/login" }   // bounce here → route recorded gated, not a bogus shot
+}
+```
+
 ## Strategy: `credentials` (scripted form login)
 
 `capture.mjs` logs in once per part per run: opens `loginPath`, fills the fields

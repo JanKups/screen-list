@@ -1,0 +1,37 @@
+// E3 drifted config: what the config looks like AFTER the user accepts the
+// skill's drift offer for the newly-added /reports page. The route is APPENDED
+// at the end (so it gets the next NN = 06) and every prior route — crucially the
+// user's "about-us" rename — is preserved byte-for-byte. Drift is additive only.
+{
+	"version": 1,
+	"project": "next-fixture",
+	"viewports": [
+		{ "name": "desktop", "width": 1440, "height": 900 },
+		{ "name": "mobile",  "width": 390,  "height": 844 },
+	],
+	"fullPage": true,
+	"parts": [
+		{
+			"name": "web",
+			"dir": ".",
+			"server": {
+				"url": "http://localhost:3000",
+				"command": "npm run dev",
+				"readyTimeoutMs": 90000,
+			},
+			"auth": {
+				"strategy": "none",
+				"gateSignal": { "urlMatching": "/login" },
+			},
+			"routes": [
+				{ "path": "/", "name": "home" },
+				{ "path": "/posts/[id]", "name": "post-detail", "params": { "id": "hello-world" } },
+				{ "path": "/about", "name": "about-us" },
+				{ "path": "/login", "name": "login" },
+				{ "path": "/dashboard", "name": "dashboard", "auth": true },
+				// Appended by accepted drift → NN 06, auto-named from the path.
+				{ "path": "/reports", "name": "reports" },
+			],
+		},
+	],
+}
