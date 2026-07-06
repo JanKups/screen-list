@@ -1,0 +1,40 @@
+// Reference config a skill-following agent authors for E1 (next-fixture, auth
+// DECLINED). JSONC with comments + trailing commas on purpose — exercises the
+// inline stripper. The user declined credential setup, so the strategy is
+// "none", but the skill still records a gateSignal so the middleware-gated
+// /dashboard is DETECTED and flagged (hard rule: never silently drop a gate).
+// /api/health and /auth/callback are excluded (non-rendering; exclusion bait).
+{
+	"version": 1,
+	"project": "next-fixture",
+	"viewports": [
+		{ "name": "desktop", "width": 1440, "height": 900 },
+		{ "name": "mobile",  "width": 390,  "height": 844 },
+	],
+	"fullPage": true,
+	"parts": [
+		{
+			"name": "web",
+			"dir": ".",
+			"server": {
+				"url": "http://localhost:3000",
+				"command": "npm run dev",
+				"readyTimeoutMs": 90000,
+			},
+			"auth": {
+				"strategy": "none",
+				// Even with auth declined, flag bounces to the login wall.
+				"gateSignal": { "urlMatching": "/login" },
+			},
+			"routes": [
+				{ "path": "/", "name": "home" },
+				// Dynamic route — sample value supplied in the batched setup question.
+				{ "path": "/posts/[id]", "name": "post-detail", "params": { "id": "hello-world" } },
+				{ "path": "/about", "name": "about" },
+				{ "path": "/login", "name": "login" },
+				// Middleware-gated; captured public-side flags it "gated", never dropped.
+				{ "path": "/dashboard", "name": "dashboard", "auth": true },
+			],
+		},
+	],
+}

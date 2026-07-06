@@ -1,0 +1,34 @@
+// E3 base config: like next-noauth, but the user has RENAMED the /about route
+// to "about-us" (a hand edit the skill must never clobber). No /reports route yet
+// — E3 adds that page to the fixture, then re-runs to exercise drift.
+{
+	"version": 1,
+	"project": "next-fixture",
+	"viewports": [
+		{ "name": "desktop", "width": 1440, "height": 900 },
+		{ "name": "mobile",  "width": 390,  "height": 844 },
+	],
+	"fullPage": true,
+	"parts": [
+		{
+			"name": "web",
+			"dir": ".",
+			"server": {
+				"url": "http://localhost:3000",
+				"command": "npm run dev",
+				"readyTimeoutMs": 90000,
+			},
+			"auth": {
+				"strategy": "none",
+				"gateSignal": { "urlMatching": "/login" },
+			},
+			"routes": [
+				{ "path": "/", "name": "home" },
+				{ "path": "/posts/[id]", "name": "post-detail", "params": { "id": "hello-world" } },
+				{ "path": "/about", "name": "about-us" },
+				{ "path": "/login", "name": "login" },
+				{ "path": "/dashboard", "name": "dashboard", "auth": true },
+			],
+		},
+	],
+}

@@ -1,0 +1,43 @@
+// Reference config for E2 (next-fixture, credentials auth CONFIGURED). The skill
+// probed the /login wall, auto-detected the form selectors, and recorded env-var
+// NAMES only — the actual username/password live in .screenshots-auth/secrets.env
+// (gitignored), never here. With a valid session, /dashboard captures normally.
+{
+	"version": 1,
+	"project": "next-fixture",
+	"viewports": [
+		{ "name": "desktop", "width": 1440, "height": 900 },
+		{ "name": "mobile",  "width": 390,  "height": 844 },
+	],
+	"fullPage": true,
+	"parts": [
+		{
+			"name": "web",
+			"dir": ".",
+			"server": {
+				"url": "http://localhost:3000",
+				"command": "npm run dev",
+				"readyTimeoutMs": 90000,
+			},
+			"auth": {
+				"strategy": "credentials",
+				"loginPath": "/login",
+				"fields": {
+					"username": "input[name=email]",
+					"password": "input[type=password]",
+					"submit": "button[type=submit]",
+				},
+				"env": { "username": "SR_WEB_USER", "password": "SR_WEB_PASSWORD" },
+				"success": { "urlNotMatching": "/login" },
+				"gateSignal": { "urlMatching": "/login" },
+			},
+			"routes": [
+				{ "path": "/", "name": "home" },
+				{ "path": "/posts/[id]", "name": "post-detail", "params": { "id": "hello-world" } },
+				{ "path": "/about", "name": "about" },
+				{ "path": "/login", "name": "login" },
+				{ "path": "/dashboard", "name": "dashboard", "auth": true },
+			],
+		},
+	],
+}

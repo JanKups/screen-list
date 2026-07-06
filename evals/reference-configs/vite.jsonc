@@ -1,0 +1,32 @@
+// Reference config for E5 (vite-fixture). The routes are defined in code
+// (createBrowserRouter in src/router.tsx), so the skill's discovery either
+// greps the `path:` strings or asks the user; either way it authors these five
+// routes here. react-router's ":id" dynamic segment is normalised to the config's
+// "[id]" form with a sample value, so expandParams builds /products/42. No auth.
+{
+	"version": 1,
+	"project": "vite-fixture",
+	"viewports": [
+		{ "name": "desktop", "width": 1440, "height": 900 },
+		{ "name": "mobile",  "width": 390,  "height": 844 },
+	],
+	"fullPage": true,
+	"parts": [
+		{
+			"name": "web",
+			"dir": ".",
+			"server": {
+				"url": "http://localhost:5273",
+				"command": "npm run dev -- --port 5273",
+				"readyTimeoutMs": 90000,
+			},
+			"routes": [
+				{ "path": "/", "name": "home" },
+				{ "path": "/about", "name": "about" },
+				{ "path": "/products", "name": "products" },
+				{ "path": "/products/[id]", "name": "product-detail", "params": { "id": "42" } },
+				{ "path": "/settings", "name": "settings" },
+			],
+		},
+	],
+}
