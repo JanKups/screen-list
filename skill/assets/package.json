@@ -1,0 +1,14 @@
+{
+  "name": "screenshots",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Standalone screenshot-review workspace. Run: npm install && node capture.mjs",
+  "scripts": {
+    "capture": "node capture.mjs",
+    "generate": "node generate.mjs"
+  },
+  "dependencies": {
+    "playwright": "^1.49.0"
+  }
+}

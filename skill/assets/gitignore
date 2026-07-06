@@ -1,0 +1,6 @@
+# Copied into the target project's screenshots/ folder as .gitignore (renamed on copy).
+# Placeholder stub — final ignore entries land in a later issue (PLAN.md §2):
+#   node_modules/
+#   .screenshots-auth/
+#   **/*.png
+#   .logs/

@@ -1,0 +1,8 @@
+// screenshots.config.jsonc — annotated template copied into the target project.
+// The skill fills in real values during Setup. See PLAN.md §4 for the full schema.
+//
+// Not yet written — placeholder stub. The annotated field-by-field template
+// lands in a later issue.
+{
+  "version": 1
+}
