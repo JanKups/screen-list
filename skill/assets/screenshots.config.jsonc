@@ -1,8 +1,105 @@
-// screenshots.config.jsonc — annotated template copied into the target project.
-// The skill fills in real values during Setup. See PLAN.md §4 for the full schema.
+// screenshots.config.jsonc — the spine of this screenshots/ folder.
 //
-// Not yet written — placeholder stub. The annotated field-by-field template
-// lands in a later issue.
+// JSONC: // line comments, /* block */ comments, and trailing commas are all
+// allowed. capture.mjs strips them with a tiny inline parser (no dependency)
+// before JSON.parse, then structurally validates the result.
+//
+// The skill fills these values in during Setup. Every field is documented here;
+// the full reference (types, defaults, per-route overrides, the state-action
+// vocabulary, settle semantics, secrets) lives in
+// skill/references/config-reference.md.
+//
+// Placeholder values below are neutral examples — replace them with your app's.
 {
-  "version": 1
+	"version": 1,                       // schema version — must be the number 1.
+	"project": "my-app",                // namespaces the gallery's localStorage key (sr:<project>:v1).
+
+	// ── Global capture defaults (per-route overridable where noted) ──────────
+	"viewports": [                      // one screenshot per route per viewport. Omit → desktop+mobile below.
+		{ "name": "desktop", "width": 1440, "height": 900 },
+		{ "name": "mobile",  "width": 390,  "height": 844 }
+	],
+	"fullPage": true,                   // capture the whole scrollable page, not just the viewport. Default true.
+	"settle": {                         // how long to wait for a page to stop moving before the shot (see config-reference §settle).
+		"networkIdleMs": 500,           // require this many ms with zero in-flight requests.
+		"timeoutMs": 15000,             // hard cap on the whole settle sequence; on timeout we warn and shoot anyway.
+		"extraDelayMs": 250,            // fixed pause after every other signal is satisfied.
+		"disableAnimations": true       // inject reduced-motion + freeze CSS so shots aren't caught mid-transition.
+	},
+
+	// ── Parts: one per app/server to screenshot (single app → one part) ──────
+	"parts": [
+		{
+			"name": "web",              // used for the output subfolder and file prefixes (web/01-home.desktop.png).
+			"dir": "apps/web",          // path to this app, relative to the repo root (the folder ABOVE screenshots/).
+
+			"server": {                 // omit if your dev server is always already running.
+				"url": "http://localhost:5173",  // the base URL to probe and to prefix every route path.
+				"command": "npm run dev",        // started in `dir` only if `url` isn't already up.
+				"cwd": null,                     // override the command's working dir (default: `dir`).
+				"readyTimeoutMs": 60000,         // how long to wait for the server to come up.
+				"readyPattern": null             // optional stdout regex signalling ready; null → poll `url` instead.
+			},
+
+			"companions": [             // extra servers started (if down) BEFORE this part's server. Omit if none.
+				{
+					"name": "api",
+					"command": "npm run dev",
+					"cwd": "services/api",
+					"readyPattern": "listening on",  // ready when stdout matches this regex…
+					"url": null                      // …or set `url` to poll instead (one of the two is required).
+				}
+			],
+
+			"auth": {                   // omit or use strategy "none" if the app needs no login.
+				"strategy": "credentials",  // "none" | "credentials" | "manual-session" | "header".
+
+				// strategy "credentials" — scripted form login (fields auto-detected at setup):
+				"loginPath": "/login",           // relative to the part's server url.
+				"fields": {
+					"username": "input[name=email]",   // selector for the username/email input.
+					"password": "input[type=password]",// selector for the password input.
+					"submit": "button[type=submit]"    // selector for the submit control.
+				},
+				"env": {                         // env-var NAMES only — never the secret values themselves.
+					"username": "SR_WEB_USER",
+					"password": "SR_WEB_PASSWORD"
+				},
+				"success": { "urlNotMatching": "/login" },  // post-login check: fail if still on /login. (Or use "urlMatching".)
+
+				// strategy "manual-session" — one-time headed login you run yourself:
+				//   no extra fields; run `node capture.mjs --login web` to save
+				//   .screenshots-auth/web.storageState.json.
+				// strategy "header" — inject a credential on every request:
+				//   "inject": { "kind": "header",         // "header" | "cookie" | "query"
+				//               "name": "Authorization",
+				//               "valueEnv": "SR_API_TOKEN",  // env-var NAME holding the secret
+				//               "format": "Bearer {value}" },// {value} is replaced with the env value
+
+				"gateSignal": { "urlMatching": "/login" }   // a bounce to a URL matching this → route recorded "gated", not failed.
+			},
+
+			// ── Routes: order defines the NN numbering prefix. Your edits are sacred. ──
+			"routes": [
+				{ "path": "/", "name": "home" },
+				{ "path": "/pricing", "name": "pricing" },
+				{
+					"path": "/items/[id]",      // [id] / [...slug] / [[...opt]] are dynamic segments.
+					"name": "item-detail",
+					"params": { "id": "abc123" },   // sample value(s) for the dynamic segment(s).
+					"auth": true,                    // this route needs the part's auth; gated if the credential is missing.
+					"settle": { "waitFor": "[data-loaded]" },  // per-route settle override/addition.
+					"states": [                      // optional named interaction states → extra shots.
+						{
+							"name": "modal-open",
+							"actions": [                 // vocabulary: click, fill ["sel","val"], hover, press, waitFor, wait, scrollTo.
+								{ "click": "text=Edit" },
+								{ "waitFor": "[role=dialog]" }
+							]
+						}
+					]
+				}
+			]
+		}
+	]
 }
