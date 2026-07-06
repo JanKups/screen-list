@@ -1,0 +1,22 @@
+[
+  {"query": "can you screenshot every page of my next.js app? it's in apps/web, runs on port 3000. i want to look them all over before we ship the redesign", "should_trigger": true},
+  {"query": "i just finished restyling the marketing site (astro, in ./site) and want a visual review pass across all the routes at desktop and mobile widths", "should_trigger": true},
+  {"query": "make me a review gallery of all the screens in my sveltekit dashboard so i can leave comments on each one", "should_trigger": true},
+  {"query": "screenshot all the routes in my remix app including the /dashboard which is behind a login, then give me something i can click through and annotate", "should_trigger": true},
+  {"query": "we're doing design QA on the whole app before launch — grab full-page shots of every route in the monorepo (apps/admin and apps/marketing) and put them in a gallery", "should_trigger": true},
+  {"query": "i want to capture screenshots of my vite + react-router SPA, all the views, so my designer can review them and drop feedback", "should_trigger": true},
+  {"query": "take screenshots of the whole app so i can review the screens — it's a next app with a bunch of dynamic routes like /posts/[slug]", "should_trigger": true},
+  {"query": "set up something that screenshots all my web pages and lets me write comments per screen, then exports the comments to markdown", "should_trigger": true},
+  {"query": "gallery of screenshots for every screen in the app pls, both mobile and desktop, so the team can do a visual review round", "should_trigger": true},
+  {"query": "before the client demo i want a full visual review of the app — every route screenshotted at two viewport sizes, in one page i can scroll through and comment on", "should_trigger": true},
+  {"query": "take screenshots of my iOS app for the App Store listing — i need the 6.7\" and 5.5\" sizes with the marketing captions", "should_trigger": false},
+  {"query": "can you screenshot my expo app running in the simulator? i want to see how the onboarding screens look on iphone", "should_trigger": false},
+  {"query": "grab a single screenshot of https://stripe.com/pricing so i can drop it into my slide deck", "should_trigger": false},
+  {"query": "my react native app's flatlist is janky when scrolling, can you screenshot the profile screen so we can see the layout bug", "should_trigger": false},
+  {"query": "i need to generate play store feature graphics and phone screenshots for my android app", "should_trigger": false},
+  {"query": "screenshot this one page https://example.com/about and crop it to just the hero section", "should_trigger": false},
+  {"query": "write a playwright test that takes a screenshot of the checkout page and diffs it against a baseline for visual regression in CI", "should_trigger": false},
+  {"query": "help me set up storybook so i can screenshot all my components in isolation and browse them", "should_trigger": false},
+  {"query": "can you take a screenshot of my terminal output and the error stack trace so i can share it with my team", "should_trigger": false},
+  {"query": "screenshot my figma designs and export each frame as a png for the handoff doc", "should_trigger": false}
+]
