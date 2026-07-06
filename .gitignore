@@ -1,0 +1,6 @@
+# Throwaway fixture apps live here; never committed (PLAN.md §1, §10).
+/workspace/*
+!/workspace/.gitkeep
+
+# macOS cruft
+.DS_Store
