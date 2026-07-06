@@ -51,8 +51,15 @@ batch where noted.
    auth). Field reference: [references/config-reference.md](references/config-reference.md).
 9. **`npm install`** inside the output folder (Playwright installs local to it;
    the host lockfile is never touched).
-10. **`node capture.mjs --login <part>`** for any `manual-session` part (headed
-    one-time login → saved storageState).
+10. **Log in as part of the same flow** for any `manual-session` part: run
+    `node capture.mjs --login <part>` yourself with the Bash tool in the
+    background — never ask the user to open a second terminal. It opens a headed
+    browser and exits on its own: with a `success`/`gateSignal` configured it
+    detects the logged-in page and saves the session automatically; otherwise
+    the user closes the browser window when done (the session is snapshotted
+    continuously, so a window close never loses it). Tell the user a browser
+    window has opened and to complete the login there, wait for the command to
+    exit, then continue straight to the next step.
 11. **CONFIRM with the user before the first capture.** This is mandatory.
 12. **Capture**: `node capture.mjs` (it runs `generate.mjs` automatically).
 13. **Report** the gallery path and how to open it (`open screenshots/gallery.html`).
@@ -74,7 +81,8 @@ batch where noted.
     - "just the /dashboard subtree" → `--route "/dashboard/**"`
     - "only mobile" → `--viewport mobile`; "only the modal-open state" →
       `--state modal-open`
-    - refresh an expired login → `--login <part>`
+    - refresh an expired login → `--login <part>` (run it in the background
+      yourself as in Setup step 10, then rerun the capture — one flow)
    No target → run `node capture.mjs` (everything). Partial runs merge into the
    existing manifest, so the gallery keeps every route.
 4. **Run** `node capture.mjs [flags]` (regenerates the gallery unless

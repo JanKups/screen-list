@@ -156,10 +156,20 @@ const routeMeta = parts.flatMap((p) => p.routes.map((r) =>
 // ---------------------------------------------------------------------------
 // HTML rendering
 // ---------------------------------------------------------------------------
+// Viewport helpers: a CSS-safe class per viewport name, and a thumbnail width
+// scaled from the configured device width (desktop reads wide, mobile narrow).
+const cssName = (s) => String(s).toLowerCase().replace(/[^a-z0-9]+/g, "-") || "vp";
+const vpDefs = Array.isArray(cfg.viewports) && cfg.viewports.length
+	? cfg.viewports
+	: [{ name: "desktop", width: 1440 }, { name: "mobile", width: 390 }];
+const vpThumbCss = vpDefs.map((v) =>
+	`.shot.vp-${cssName(v.name)}{width:${Math.round(Math.max(180, Math.min(380, (v.width || 1200) / 4)))}px}`).join("\n  ");
+
 function shotHtml(shot) {
-	const label = shot.state ? `${shot.state} · ${shot.viewport}` : shot.viewport;
+	const label = shot.state ? shot.state : shot.viewport;
 	return `
-        <a class="shot" href="${esc(shot.file)}" target="_blank" rel="noopener" title="${esc(shot.file)}">
+        <a class="shot vp-${cssName(shot.viewport)}" data-viewport="${esc(shot.viewport)}" href="${esc(shot.file)}"
+           title="${esc(shot.file)}">
           <span class="frame"><img loading="lazy" src="${esc(shot.file)}" alt="${esc(shot.file)}"></span>
           <span class="shot-label">${esc(label)}</span>
         </a>`;
@@ -181,8 +191,11 @@ function okRow(route) {
 		: `<span class="no-shots">no screenshots on file — run capture.mjs</span>`;
 	return `
     <div class="row" data-key="${esc(route.key)}">
-      <div class="head"><span class="rname">${esc(route.name)}</span></div>
-      <div class="shots">${shots}</div>
+      <div class="shots-col">
+        <div class="head"><span class="rname">${esc(route.name)}</span></div>
+        <div class="shots">${shots}</div>
+        <div class="no-vp" hidden>not captured at this viewport</div>
+      </div>
       ${commentPane(route, "Comment on this screen…")}
     </div>`;
 }
@@ -236,75 +249,126 @@ const html = `<!doctype html>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' rx='3' fill='%23161310'/%3E%3Ccircle cx='8' cy='8' r='4' fill='%23e8862e'/%3E%3C/svg%3E">
 <title>Screenshot review — ${esc(project)}</title>
 <style>
+  /* Darkroom contact-sheet: warm charcoal, ember accent, mono annotations. */
   :root {
-    --bg:#0f1115; --panel:#171a21; --line:#262b36; --ink:#e6e9ef; --muted:#8a93a6;
-    --accent:#7c83ff; --ok:#3ddc84; --warn:#f5a524; --err:#f0616d;
+    --bg:#161310; --panel:#1d1915; --panel-2:#242019; --line:#332c23; --line-soft:#2a241d;
+    --ink:#ece5da; --muted:#9c8f7d; --faint:#6e6355;
+    --ember:#e8862e; --ember-soft:rgba(232,134,46,.14);
+    --ok:#8fbf5f; --warn:#d9a13c; --err:#d95f5f;
+    --font-ui:"Avenir Next","Avenir","Segoe UI Variable","Seravek",system-ui,sans-serif;
+    --font-mono:ui-monospace,"SF Mono","Cascadia Mono",Menlo,Consolas,monospace;
   }
   * { box-sizing:border-box; }
-  body { margin:0; background:var(--bg); color:var(--ink);
-         font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
-  header { position:sticky; top:0; z-index:10; background:rgba(15,17,21,.92); backdrop-filter:blur(8px);
-           border-bottom:1px solid var(--line); padding:12px 20px; display:flex; align-items:center;
-           gap:16px; flex-wrap:wrap; }
-  header h1 { font-size:15px; margin:0; font-weight:600; }
-  .prog, .summary { color:var(--muted); font-variant-numeric:tabular-nums; }
+  html { scroll-behavior:smooth; }
+  body { margin:0; color:var(--ink); font:15px/1.5 var(--font-ui);
+         background:
+           radial-gradient(1100px 500px at 75% -12%, rgba(232,134,46,.06), transparent 60%),
+           radial-gradient(900px 500px at -10% 110%, rgba(232,134,46,.03), transparent 55%),
+           var(--bg); }
+  header { position:sticky; top:0; z-index:10; background:rgba(22,19,16,.94);
+           backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px);
+           border-bottom:1px solid var(--line); padding:12px 20px;
+           display:flex; align-items:center; gap:16px; flex-wrap:wrap; }
+  header h1 { margin:0; font:600 12px/1 var(--font-mono); letter-spacing:.22em;
+              text-transform:uppercase; color:var(--ember); }
+  .prog, .summary { color:var(--muted); font-size:13px; font-variant-numeric:tabular-nums; }
   .prog b { color:var(--ok); }
   .summary b { color:var(--ink); }
   .spacer { flex:1; }
   button, label.btn { background:var(--panel); color:var(--ink); border:1px solid var(--line);
-           border-radius:8px; padding:7px 14px; font-size:13px; cursor:pointer; }
-  button.primary { background:var(--accent); border-color:var(--accent); color:#fff; font-weight:600; }
+           border-radius:8px; padding:7px 14px; font:13px var(--font-ui); cursor:pointer;
+           transition:border-color .15s, background .15s; }
+  button.primary { background:var(--ember); border-color:var(--ember); color:#171008; font-weight:700; }
+  button.primary:hover { background:#f39a48; border-color:#f39a48; }
   button:hover, label.btn:hover { border-color:var(--muted); }
   input[type=file]{ display:none; }
-  .stale { display:none; margin:0; padding:12px 20px; background:rgba(245,165,36,.12);
-           border-bottom:1px solid var(--warn); color:#f7c65e; font-size:13px; }
+  /* Viewport toggler */
+  .vp-toggle { display:inline-flex; border:1px solid var(--line); border-radius:999px;
+               background:var(--panel); padding:3px; gap:2px; }
+  .vp-toggle button { border:0; border-radius:999px; padding:5px 14px; background:transparent;
+                      color:var(--muted); font:12px var(--font-mono); letter-spacing:.06em; }
+  .vp-toggle button:hover { color:var(--ink); }
+  .vp-toggle button.active { background:var(--ember); color:#171008; font-weight:700; }
+  .stale { display:none; margin:0; padding:12px 20px; background:rgba(217,161,60,.1);
+           border-bottom:1px solid var(--warn); color:#e5bd6d; font-size:13px; }
   .stale.show { display:block; }
-  main { max-width:1200px; margin:0 auto; padding:20px; }
-  .part { margin:20px 0; border:1px solid var(--line); border-radius:12px; background:var(--panel); }
-  .part > summary { list-style:none; cursor:pointer; padding:14px 18px; font-size:16px; font-weight:700;
-                     display:flex; align-items:center; gap:10px; user-select:none; }
+  main { max-width:1280px; margin:0 auto; padding:24px 20px 80px; }
+  .part { margin:22px 0; border:1px solid var(--line); border-radius:14px; background:var(--panel);
+          box-shadow:0 1px 0 rgba(0,0,0,.4), 0 12px 40px -30px rgba(0,0,0,.8); }
+  .part > summary { list-style:none; cursor:pointer; padding:14px 18px;
+                     display:flex; align-items:center; gap:12px; user-select:none; }
   .part > summary::-webkit-details-marker { display:none; }
-  .part > summary::before { content:"▸"; color:var(--muted); font-size:12px; transition:transform .15s; }
+  .part > summary::before { content:"▸"; color:var(--faint); font-size:12px; transition:transform .15s; }
   .part[open] > summary::before { transform:rotate(90deg); }
-  .part > summary:hover .pname { color:var(--accent); }
-  .part-count { color:var(--muted); font-weight:400; font-size:13px; }
-  .count { color:var(--accent); font-weight:700; font-size:13px; }
-  .row { padding:16px 18px; border-top:1px solid var(--line); }
+  .pname { font:700 15px var(--font-ui); letter-spacing:.01em; }
+  .part > summary:hover .pname { color:var(--ember); }
+  .part-count { color:var(--faint); font:12px var(--font-mono); }
+  .count { color:var(--ember); font:700 12px var(--font-mono); }
+  /* Row: shots left, comment pane right */
+  .row { padding:18px; border-top:1px solid var(--line-soft); display:grid;
+         grid-template-columns:minmax(0,1fr) minmax(260px,340px); gap:20px; align-items:start; }
   .head { margin-bottom:10px; }
   .rname { font-weight:600; font-size:14px; }
-  .shots { display:flex; gap:12px; overflow-x:auto; padding-bottom:6px; margin-bottom:12px; }
-  .shot { flex:0 0 auto; width:260px; text-decoration:none; color:var(--muted); }
-  .shot .frame { display:block; max-height:520px; overflow:hidden; border:1px solid var(--line);
-                 border-radius:10px; background:#000; }
+  .shots { display:flex; gap:14px; overflow-x:auto; padding-bottom:6px; }
+  .shot { flex:0 0 auto; text-decoration:none; color:var(--muted); cursor:zoom-in; }
+  .shot[hidden] { display:none; }
+  .shot .frame { display:block; max-height:480px; overflow:hidden; border:1px solid var(--line);
+                 border-radius:10px; background:#0c0a08;
+                 transition:border-color .15s, transform .15s; }
+  .shot:hover .frame { border-color:var(--ember); transform:translateY(-2px); }
   .shot img { width:100%; display:block; }
-  .shot-label { display:block; margin-top:6px; font:12px ui-monospace,Menlo,monospace; }
-  .no-shots { color:var(--muted); font-size:13px; font-style:italic; }
-  .pane { display:flex; flex-direction:column; gap:8px; }
-  .path { color:var(--muted); font:12px ui-monospace,Menlo,monospace; user-select:all; }
-  textarea.cmt { min-height:80px; resize:vertical; background:var(--bg); color:var(--ink);
-                 border:1px solid var(--line); border-radius:10px; padding:12px; font:14px/1.5 inherit; }
-  textarea.cmt:focus { outline:none; border-color:var(--accent); }
+  .shot-label { display:block; margin-top:6px; font:11px var(--font-mono); letter-spacing:.08em;
+                text-transform:lowercase; }
+  .shot:hover .shot-label { color:var(--ember); }
+  ${vpThumbCss}
+  .no-shots, .no-vp { color:var(--faint); font-size:13px; font-style:italic; }
+  .no-vp { padding:14px 0; }
+  .pane { display:flex; flex-direction:column; gap:8px; position:sticky; top:76px; }
+  .path { color:var(--muted); font:12px var(--font-mono); user-select:all; overflow-wrap:anywhere; }
+  textarea.cmt { min-height:140px; flex:1; resize:vertical; background:var(--bg); color:var(--ink);
+                 border:1px solid var(--line); border-radius:10px; padding:12px;
+                 font:14px/1.5 var(--font-ui); transition:border-color .15s; }
+  textarea.cmt:focus { outline:none; border-color:var(--ember); box-shadow:0 0 0 3px var(--ember-soft); }
   textarea.cmt.filled { border-color:var(--ok); }
   /* Flagged (gated / error) rows */
-  .row.flagged { display:grid; grid-template-columns:1fr; gap:12px; }
   .row.gated { border-left:4px solid var(--warn); }
   .row.error { border-left:4px solid var(--err); }
+  .flag-main { display:flex; flex-direction:column; gap:10px; }
   .flag-head { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
-  .badge { font-size:12px; font-weight:700; padding:2px 8px; border-radius:999px; }
-  .row.gated .badge { background:rgba(245,165,36,.18); color:var(--warn); }
-  .row.error .badge { background:rgba(240,97,109,.18); color:var(--err); }
-  .flag-path { color:var(--muted); font:12px ui-monospace,Menlo,monospace; }
+  .badge { font:700 11px var(--font-mono); letter-spacing:.06em; padding:3px 9px; border-radius:999px; }
+  .row.gated .badge { background:rgba(217,161,60,.16); color:var(--warn); }
+  .row.error .badge { background:rgba(217,95,95,.16); color:var(--err); }
+  .flag-path { color:var(--muted); font:12px var(--font-mono); }
   .reason { color:var(--ink); font-size:13px; }
   .remedy-wrap { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
-  .remedy-label { color:var(--muted); font-size:12px; text-transform:uppercase; letter-spacing:.05em; }
+  .remedy-label { color:var(--faint); font:11px var(--font-mono); text-transform:uppercase; letter-spacing:.1em; }
   code.remedy { background:var(--bg); border:1px solid var(--line); border-radius:8px; padding:6px 10px;
-                font:13px ui-monospace,Menlo,monospace; color:var(--ink); cursor:pointer; }
-  code.remedy:hover { border-color:var(--accent); }
+                font:13px var(--font-mono); color:var(--ink); cursor:pointer; }
+  code.remedy:hover { border-color:var(--ember); }
   code.remedy.copied { border-color:var(--ok); color:var(--ok); }
-  .hint { color:var(--muted); font-size:12px; }
-  @media (max-width:720px){ .shot{ width:200px; } }
+  /* Lightbox: fixed overlay, scrollable for tall full-page shots */
+  #lb { position:fixed; inset:0; z-index:50; display:none; overflow:auto;
+        overscroll-behavior:contain; background:rgba(14,11,9,.94);
+        -webkit-backdrop-filter:blur(6px); backdrop-filter:blur(6px); }
+  #lb.open { display:block; }
+  #lb .lb-bar { position:sticky; top:0; z-index:2; display:flex; align-items:center; gap:14px;
+        padding:12px 20px; background:linear-gradient(rgba(14,11,9,.92), rgba(14,11,9,0)); }
+  #lb .lb-file { color:var(--muted); font:12px var(--font-mono); overflow-wrap:anywhere; }
+  #lb .lb-hint { color:var(--faint); font:11px var(--font-mono); letter-spacing:.06em; }
+  #lb .lb-close { margin-left:auto; }
+  #lb img { display:block; width:auto; max-width:min(1600px, 94vw); margin:8px auto 120px;
+        border:1px solid var(--line); border-radius:8px; cursor:zoom-in;
+        box-shadow:0 30px 80px -20px rgba(0,0,0,.9); }
+  #lb.zoomed img { max-width:none; width:94vw; cursor:zoom-out; }
+  body.lb-open { overflow:hidden; }
+  @media (max-width:860px){
+    .row { grid-template-columns:1fr; }
+    .pane { position:static; }
+    textarea.cmt { min-height:90px; }
+  }
 </style>
 </head>
 <body>
@@ -312,7 +376,8 @@ const html = `<!doctype html>
   <h1>Screenshot review</h1>
   <span class="prog"><b id="done">0</b> / ${totalRows} commented</span>
   <span class="summary">${summaryHtml}</span>
-  <span class="hint">focus a field → type or dictate → Cmd+Enter for next</span>
+  <nav class="vp-toggle" id="vpToggle" aria-label="Viewport">${vpDefs.map((v) =>
+		`<button data-vp="${esc(v.name)}">${esc(v.name)}</button>`).join("")}</nav>
   <span class="spacer"></span>
   <button id="collapseAll">Collapse all</button>
   <button id="expandAll">Expand all</button>
@@ -322,6 +387,14 @@ const html = `<!doctype html>
 </header>
 <div class="stale" id="stale"></div>
 <main>${partsHtml}</main>
+<div id="lb" role="dialog" aria-modal="true" aria-label="Screenshot">
+  <div class="lb-bar">
+    <span class="lb-file" id="lbFile"></span>
+    <span class="lb-hint">click to zoom · ←/→ next shot · esc to close</span>
+    <button class="lb-close" id="lbClose">Close ✕</button>
+  </div>
+  <img id="lbImg" alt="">
+</div>
 <script>
 const KEY = ${JSON.stringify(KEY)};
 const ROUTES = ${JSON.stringify(routeMeta)};
@@ -375,6 +448,67 @@ document.querySelectorAll("code.remedy").forEach(c => {
     const t = c.textContent; c.textContent = "copied ✓";
     setTimeout(() => { c.textContent = t; c.classList.remove("copied"); }, 1200);
   });
+});
+
+// Viewport toggler: each row shows one viewport's shots; choice is remembered.
+const VPKEY = KEY + ":vp";
+const vpButtons = [...document.querySelectorAll("#vpToggle button")];
+const vpNames = vpButtons.map(b => b.dataset.vp);
+function setViewport(name){
+  if (!vpNames.includes(name)) name = vpNames[0];
+  vpButtons.forEach(b => b.classList.toggle("active", b.dataset.vp === name));
+  document.querySelectorAll(".row").forEach(row => {
+    const shots = [...row.querySelectorAll(".shot")];
+    if (!shots.length) return;
+    let visible = 0;
+    shots.forEach(s => { const show = s.dataset.viewport === name; s.hidden = !show; if (show) visible++; });
+    const note = row.querySelector(".no-vp");
+    if (note) note.hidden = visible > 0;
+  });
+  try { localStorage.setItem(VPKEY, name); } catch {}
+}
+vpButtons.forEach(b => b.addEventListener("click", () => setViewport(b.dataset.vp)));
+let savedVp = null; try { savedVp = localStorage.getItem(VPKEY); } catch {}
+setViewport(savedVp || vpNames[0]);
+
+// Lightbox: click a shot → enlarge in place. The overlay itself scrolls, so
+// tall full-page captures can be read top to bottom without leaving the page.
+const lb = document.getElementById("lb");
+const lbImg = document.getElementById("lbImg");
+const lbFile = document.getElementById("lbFile");
+let lbList = [], lbIndex = -1;
+function openLb(shot){
+  lbList = [...document.querySelectorAll(".shot")].filter(s => !s.hidden);
+  lbIndex = lbList.indexOf(shot);
+  lbImg.src = shot.getAttribute("href");
+  lbFile.textContent = shot.getAttribute("href");
+  lb.classList.remove("zoomed");
+  lb.classList.add("open");
+  lb.scrollTop = 0;
+  document.body.classList.add("lb-open");
+}
+function closeLb(){
+  lb.classList.remove("open","zoomed");
+  lbImg.removeAttribute("src");
+  document.body.classList.remove("lb-open");
+}
+function stepLb(d){
+  if (lbIndex === -1) return;
+  const nextShot = lbList[lbIndex + d];
+  if (nextShot) openLb(nextShot);
+}
+document.querySelectorAll(".shot").forEach(s => s.addEventListener("click", (e) => {
+  e.preventDefault();
+  openLb(s);
+}));
+lbImg.addEventListener("click", () => lb.classList.toggle("zoomed"));
+document.getElementById("lbClose").addEventListener("click", closeLb);
+lb.addEventListener("click", (e) => { if (e.target === lb) closeLb(); });
+document.addEventListener("keydown", (e) => {
+  if (!lb.classList.contains("open")) return;
+  if (e.key === "Escape") closeLb();
+  else if (e.key === "ArrowRight") { e.preventDefault(); stepLb(1); }
+  else if (e.key === "ArrowLeft") { e.preventDefault(); stepLb(-1); }
 });
 
 // Export → COMMENTS.md + comments.json

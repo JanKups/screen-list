@@ -515,10 +515,18 @@ async function detectGate(part, requestedPath, finalUrl, page) {
 // SECTION 4b — `--login <part>` headed one-time login (§5.5)
 // ============================================================================
 //
-// Launch a HEADED Chromium at server.url + loginPath, let the human complete the
-// login, press Enter, verify success/gateSignal if configured (warn but save
-// anyway if unverifiable), and write .screenshots-auth/<part>.storageState.json.
-// Also serves as a session refresh. Server lifecycle applies.
+// Launch a HEADED Chromium at server.url + loginPath and let the human complete
+// the login. NO stdin interaction — the script watches the browser and finishes
+// on its own, so an agent (or CI wrapper) can run it as a background step:
+//   - success/gateSignal configured → poll every second; once a SAME-ORIGIN page
+//     verifies as logged-in for two consecutive polls, save and exit. (Same-origin
+//     only: an OAuth detour to accounts.google.com must not read as success.)
+//   - not verifiable → the user closes the browser window when done.
+//   - either way the session is snapshotted to
+//     .screenshots-auth/<part>.storageState.json every poll, so closing the
+//     window at any point keeps the latest state. Enter still works as a manual
+//     finish when run from a real terminal. Also serves as a session refresh.
+//     Server lifecycle applies.
 async function runLogin(cfg, partName) {
 	const part = cfg.parts.find((p) => p.name === partName);
 	if (!part) fail(`--login: no part named "${partName}" in config`);
@@ -539,6 +547,9 @@ async function runLogin(cfg, partName) {
 	for (const comp of part.companions || []) await ensureServer({ ...comp, dir: part.dir }, repoRoot, logsDir);
 	if (part.server) await ensureServer({ name: part.name, ...part.server, dir: part.dir }, repoRoot, logsDir);
 
+	const verifiable = !!(auth.success || auth.gateSignal);
+	const file = statePath(partName);
+
 	let browser;
 	try {
 		browser = await chromium.launch({ headless: false });
@@ -548,38 +559,97 @@ async function runLogin(cfg, partName) {
 
 		console.log("\n" + "=".repeat(60));
 		console.log(`Complete the login in the browser window for part "${partName}".`);
-		console.log("Press Enter here once you're on a logged-in page.");
-		console.log("=".repeat(60));
-		await waitForEnter();
-
-		const url = page.url();
-		const verifiable = auth.success || auth.gateSignal;
 		if (verifiable) {
-			const ok =
-				verifySuccess(auth.success, url) &&
-				!(auth.gateSignal?.urlMatching && url.includes(auth.gateSignal.urlMatching));
-			if (ok) console.log(`Verified: on ${url}.`);
-			else console.warn(`Warning: could not verify a logged-in page (still on ${url}); saving session anyway.`);
+			console.log("The session is saved automatically once you land on a logged-in page.");
 		} else {
-			console.log("No success/gateSignal configured — saving session without verification.");
+			console.log("No success/gateSignal configured — close the browser window once");
+			console.log("you're logged in and the session will be saved as-is.");
+		}
+		console.log("=".repeat(60));
+
+		const outcome = await watchLogin(context, auth, baseUrl, file);
+
+		if (outcome.status === "verified") {
+			console.log(`Verified: logged in (on ${outcome.url}).`);
+		} else if (outcome.status === "closed") {
+			if (verifiable) console.warn("Warning: browser closed before a logged-in page was verified; saving the last session state anyway.");
+			else console.log("Browser closed — saving the session without verification.");
+		} else if (outcome.status === "timeout") {
+			console.warn(`Warning: no verified login after ${LOGIN_TIMEOUT_MS / 60000} minutes; saving the last session state anyway.`);
+		} else if (outcome.status === "enter") {
+			console.log("Enter pressed — saving the current session.");
 		}
 
-		const file = statePath(partName);
-		await context.storageState({ path: file });
+		// Final snapshot if the context is still alive; otherwise the last per-poll
+		// snapshot already on disk is the result.
+		try { await context.storageState({ path: file }); } catch { /* context gone — per-poll snapshot stands */ }
 		console.log(`Saved session → ${file}`);
-		await context.close();
+		try { await context.close(); } catch { /* already closed */ }
 	} finally {
-		if (browser) await browser.close();
+		if (browser) await browser.close().catch(() => {});
 		await teardownServers(false);
 	}
 }
 
-// Resolve on the next line typed at stdin (Enter). Used only by --login.
-function waitForEnter() {
-	return new Promise((resolve) => {
-		process.stdin.resume();
-		process.stdin.once("data", () => { process.stdin.pause(); resolve(); });
-	});
+const LOGIN_TIMEOUT_MS = 10 * 60 * 1000;
+
+// Poll the headed context once per second until the login completes. Returns
+// { status: "verified" | "closed" | "timeout" | "enter", url? }. Every poll
+// snapshots storageState to `file` so a window close never loses the session.
+async function watchLogin(context, auth, baseUrl, file) {
+	const verifiable = !!(auth.success || auth.gateSignal);
+	const appOrigin = (() => { try { return new URL(baseUrl).origin; } catch { return null; } })();
+	const deadline = Date.now() + LOGIN_TIMEOUT_MS;
+
+	// Enter on a real terminal still finishes immediately (manual runs). When
+	// stdin is not a TTY (agent/background run) no listener is attached.
+	let enterPressed = false;
+	const onStdin = () => { enterPressed = true; };
+	if (process.stdin.isTTY) { process.stdin.resume(); process.stdin.once("data", onStdin); }
+	const stopStdin = () => {
+		if (process.stdin.isTTY) { process.stdin.off("data", onStdin); process.stdin.pause(); }
+	};
+
+	let disconnected = false;
+	context.browser()?.on("disconnected", () => { disconnected = true; });
+
+	const loggedIn = (url) => {
+		if (appOrigin) {
+			try { if (new URL(url).origin !== appOrigin) return false; } catch { return false; }
+		}
+		return (
+			verifySuccess(auth.success, url) &&
+			!(auth.gateSignal?.urlMatching && url.includes(auth.gateSignal.urlMatching))
+		);
+	};
+
+	let consecutiveOk = 0; // require 2 polls in a row → skip transient redirect states
+	try {
+		while (Date.now() < deadline) {
+			if (enterPressed) return { status: "enter" };
+			if (disconnected) return { status: "closed" };
+
+			let pages;
+			try { pages = context.pages(); } catch { return { status: "closed" }; }
+			if (pages.length === 0) return { status: "closed" };
+
+			try { await context.storageState({ path: file }); } catch { /* mid-navigation hiccup — next poll */ }
+
+			if (verifiable) {
+				const hit = pages.map((p) => { try { return p.url(); } catch { return ""; } }).find(loggedIn);
+				if (hit) {
+					consecutiveOk++;
+					if (consecutiveOk >= 2) return { status: "verified", url: hit };
+				} else {
+					consecutiveOk = 0;
+				}
+			}
+			await sleep(1000);
+		}
+		return { status: "timeout" };
+	} finally {
+		stopStdin();
+	}
 }
 
 // ============================================================================
