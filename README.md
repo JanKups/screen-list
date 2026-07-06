@@ -32,6 +32,12 @@ The export is the point. You look at the app once, write down what's wrong, and 
 ## Quickstart
 
 ```bash
+npx skills add JanKups/screen-list
+```
+
+Or install by hand:
+
+```bash
 git clone https://github.com/JanKups/screen-list.git
 cp -r screen-list/skill ~/.claude/skills/screen-list
 ```
