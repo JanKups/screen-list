@@ -102,9 +102,12 @@ once; the browser session is saved to
 }
 ```
 
-- **Setup:** run `node capture.mjs --login <part>`. It opens a headed browser at
-  the sign-in URL; complete the login and press Enter. The session is written to
-  the state file (also used to refresh an expired one).
+- **Setup:** run `node capture.mjs --login <part>` (the skill runs this itself,
+  in the background). It opens a headed browser at the sign-in URL; the user
+  completes the login there. With a `success`/`gateSignal` configured the script
+  detects the logged-in page and finishes on its own; without one, closing the
+  browser window saves the session. Either way the session is written to the
+  state file (also used to refresh an expired one) — no terminal interaction.
 - **`secrets.env`:** nothing (no scripted credentials).
 
 ## Strategy: `header` (inject a credential)

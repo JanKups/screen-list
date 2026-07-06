@@ -10,5 +10,10 @@
 # then rename skill.skill → screen-list.skill (packager names by folder).
 *.skill
 
+# Skill-dev tooling from this repo's own Claude Code sessions — never committed.
+/.agents/
+/skills-lock.json
+/.playwright-mcp/
+
 # macOS cruft
 .DS_Store
