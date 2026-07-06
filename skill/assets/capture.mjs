@@ -12,10 +12,6 @@
 //
 // The ONLY dependency is `playwright`. JSONC is parsed by a tiny inline
 // comment-stripper (§5.2) — no config-parser dependency.
-//
-// Scope note: auth strategies + --login (§5.4/§5.5) and gate detection +
-// capture-manifest.json (§5.8) are intentionally seamed out here and land in a
-// follow-up issue. Search this file for "SEAM(#4)" for every hand-off point.
 // ============================================================================
 
 import { chromium } from "playwright";
@@ -36,7 +32,7 @@ Usage:
   node capture.mjs --route "<glob>"      Filter routes by path glob (repeatable)
   node capture.mjs --viewport <name>     Only this viewport
   node capture.mjs --state <name>        Only states matching (base is always kept)
-  node capture.mjs --login <part>        Headed one-time login (not implemented yet)
+  node capture.mjs --login <part>        Headed one-time login → storageState
   node capture.mjs --keep-servers        Don't stop servers we started
   node capture.mjs --dry-run             Print the capture matrix, no browser
   node capture.mjs --no-gallery          Skip the generate.mjs gallery step
@@ -356,28 +352,234 @@ function killAllSync() {
 }
 
 // ============================================================================
-// SECTION 4 — Auth resolution → browser context (§5.4)  ·  SEAM(#4)
+// SECTION 4 — Auth resolution → browser context (§5.4)
 // ============================================================================
 //
-// Issue #4 builds auth strategies (none | credentials | manual-session | header),
-// the --login headed flow (§5.5), and gate detection (§5.8). Until then every
-// context is a plain public context and routes flagged `auth: true` are captured
-// as-is. This function is the single hand-off point: return the extra options to
-// merge into browser.newContext() for a part.
-async function resolveAuthContextOptions(_part) {
-	// SEAM(#4): inspect _part.auth.strategy and return storageState /
-	// extraHTTPHeaders / cookies, or mark routes gated when creds are missing.
-	return {};
+// Four strategies from the §4 config schema:
+//   none            → plain context.
+//   manual-session  → storageState from .screenshots-auth/<part>.storageState.json;
+//                     missing file does NOT fail the run — auth:true routes become
+//                     gated with the `--login` remedy, everything else captures.
+//   credentials     → scripted form login ONCE per part per run; the resulting
+//                     storageState is held in memory and reused across that part's
+//                     viewport contexts. Missing env → same gated-not-failed path.
+//   header          → inject a credential per the `inject` block:
+//                     kind:header → extraHTTPHeaders, kind:cookie → addCookies,
+//                     kind:query  → appended to every navigated URL.
+//
+// resolveAuth() returns a resolved auth context for a part:
+//   { contextOptions, cookies, query, unmet }
+//   - contextOptions : merged into browser.newContext() (storageState / headers)
+//   - cookies        : passed to context.addCookies() after creation (kind:cookie)
+//   - query          : "k=v" appended to every navigated URL (kind:query)
+//   - unmet          : null, or { reason, remedy } when the credential is missing
+//                      / login failed → auth:true routes are recorded gated, the
+//                      run never fails.
+
+function statePath(partName) {
+	return path.join(".screenshots-auth", `${partName}.storageState.json`);
 }
 
-// SEAM(#4): gate detection after navigation. Returns null (not gated) for now.
-function detectGate(_part, _finalUrl) {
+async function fileExists(f) {
+	try { await fs.access(f); return true; } catch { return false; }
+}
+
+// Remedy string offered for a gated route, per the part's strategy.
+function remedyFor(part) {
+	const s = part.auth?.strategy;
+	if (s === "credentials" || s === "manual-session") return `node capture.mjs --login ${part.name}`;
+	if (s === "header") {
+		const e = part.auth?.inject?.valueEnv;
+		return `set ${e || "the credential env var"} in .screenshots-auth/secrets.env`;
+	}
+	return `configure auth for part "${part.name}"`;
+}
+
+// Verify a post-login URL against the config's `success` block. No block → we
+// cannot verify, so assume success (caller may warn).
+function verifySuccess(success, url) {
+	if (!success) return true;
+	if (success.urlNotMatching && url.includes(success.urlNotMatching)) return false;
+	if (success.urlMatching && !url.includes(success.urlMatching)) return false;
+	return true;
+}
+
+const NO_AUTH = { contextOptions: {}, cookies: [], query: "", unmet: null };
+
+async function resolveAuth(part, browser, baseUrl) {
+	const auth = part.auth;
+	const strategy = auth?.strategy;
+	if (!strategy || strategy === "none") return NO_AUTH;
+	const remedy = remedyFor(part);
+
+	if (strategy === "manual-session") {
+		const file = statePath(part.name);
+		if (await fileExists(file)) return { contextOptions: { storageState: file }, cookies: [], query: "", unmet: null };
+		return { ...NO_AUTH, unmet: { reason: `no saved session (${file} missing)`, remedy } };
+	}
+
+	if (strategy === "header") return resolveHeaderInject(auth, baseUrl, remedy);
+
+	if (strategy === "credentials") return resolveCredentials(part, browser, baseUrl, remedy);
+
+	fail(`parts[].auth.strategy "${strategy}" is not supported (none | credentials | manual-session | header)`);
+}
+
+// header strategy: read the credential value from env (never from config), then
+// place it as an HTTP header, a cookie, or a query param.
+function resolveHeaderInject(auth, baseUrl, remedy) {
+	const inject = auth.inject;
+	if (!inject || !inject.kind) fail(`parts[].auth.inject must set { kind, name, valueEnv } for strategy "header"`);
+	const val = process.env[inject.valueEnv];
+	if (val === undefined || val === "") {
+		return { ...NO_AUTH, unmet: { reason: `credential env ${inject.valueEnv} not set`, remedy: `set ${inject.valueEnv} in .screenshots-auth/secrets.env` } };
+	}
+	const formatted = inject.format ? inject.format.replace("{value}", val) : val;
+	if (inject.kind === "header") {
+		return { contextOptions: { extraHTTPHeaders: { [inject.name]: formatted } }, cookies: [], query: "", unmet: null };
+	}
+	if (inject.kind === "cookie") {
+		const u = new URL(baseUrl || "http://localhost");
+		return { contextOptions: {}, cookies: [{ name: inject.name, value: formatted, domain: u.hostname, path: "/" }], query: "", unmet: null };
+	}
+	if (inject.kind === "query") {
+		return { contextOptions: {}, cookies: [], query: `${encodeURIComponent(inject.name)}=${encodeURIComponent(formatted)}`, unmet: null };
+	}
+	fail(`parts[].auth.inject.kind "${inject.kind}" is not supported (header | cookie | query)`);
+}
+
+// credentials strategy: scripted form login ONCE per part per run. Reads creds
+// from env (names only in config), fills the login form, verifies `success`,
+// returns the resulting storageState object to reuse across viewport contexts.
+async function resolveCredentials(part, browser, baseUrl, remedy) {
+	const auth = part.auth;
+	const f = auth.fields || {};
+	const env = auth.env || {};
+	const user = process.env[env.username];
+	const pass = process.env[env.password];
+	if (!user || !pass) {
+		return { ...NO_AUTH, unmet: { reason: `login credentials not set (env ${env.username}/${env.password} missing)`, remedy: `set ${env.username} and ${env.password} in .screenshots-auth/secrets.env` } };
+	}
+	const loginUrl = baseUrl + (auth.loginPath || "/login");
+	const ctx = await browser.newContext();
+	const page = await ctx.newPage();
+	try {
+		await page.goto(loginUrl, { waitUntil: "load" });
+		await page.fill(f.username, user);
+		await page.fill(f.password, pass);
+		await page.click(f.submit);
+		// Wait until we leave the login path (soft nav after a server-action redirect),
+		// bounded — a failed login stays on loginPath and simply times out here.
+		const loginPath = auth.loginPath || "/login";
+		await page.waitForURL((u) => new URL(u).pathname !== loginPath, { timeout: 8000 }).catch(() => {});
+		const url = page.url();
+		if (!verifySuccess(auth.success, url)) {
+			await ctx.close();
+			return { ...NO_AUTH, unmet: { reason: `login failed (landed on ${url})`, remedy } };
+		}
+		const state = await ctx.storageState();
+		await ctx.close();
+		console.log(`  · ${part.name}: logged in via credentials (session cached for this run)`);
+		return { contextOptions: { storageState: state }, cookies: [], query: "", unmet: null };
+	} catch (e) {
+		await ctx.close().catch(() => {});
+		return { ...NO_AUTH, unmet: { reason: `login error: ${e.message}`, remedy } };
+	}
+}
+
+// Gate detection (§5.8): after a navigation, decide whether the route bounced to
+// a login wall. Returns a human-readable reason (→ gated, no PNG) or null.
+// The login page itself (route path == loginPath / matches gateSignal) is NEVER
+// gated — we still want to screenshot it.
+async function detectGate(part, requestedPath, finalUrl, page) {
+	const auth = part.auth;
+	if (!auth) return null;
+	const gs = auth.gateSignal;
+	const loginPath = auth.loginPath;
+	const isLoginRoute =
+		(gs?.urlMatching && requestedPath.includes(gs.urlMatching)) ||
+		(loginPath && requestedPath === loginPath);
+	if (isLoginRoute) return null;
+	if (gs?.urlMatching && finalUrl.includes(gs.urlMatching)) {
+		return `redirected to ${gs.urlMatching} — not authenticated (session missing or expired)`;
+	}
+	const sel = auth.fields?.username;
+	if (sel) {
+		const present = await page.$(sel).then((el) => !!el).catch(() => false);
+		if (present) return `login form present (${sel}) — not authenticated`;
+	}
 	return null;
 }
 
-function loginStub(part) {
-	console.error(`--login ${part}: not implemented yet (lands in the auth issue).`);
-	process.exit(1);
+// ============================================================================
+// SECTION 4b — `--login <part>` headed one-time login (§5.5)
+// ============================================================================
+//
+// Launch a HEADED Chromium at server.url + loginPath, let the human complete the
+// login, press Enter, verify success/gateSignal if configured (warn but save
+// anyway if unverifiable), and write .screenshots-auth/<part>.storageState.json.
+// Also serves as a session refresh. Server lifecycle applies.
+async function runLogin(cfg, partName) {
+	const part = cfg.parts.find((p) => p.name === partName);
+	if (!part) fail(`--login: no part named "${partName}" in config`);
+	const auth = part.auth || {};
+	const baseUrl = part.server?.url?.replace(/\/$/, "") || "";
+	const loginPath = auth.loginPath || "/login";
+
+	const logsDir = path.resolve(".logs");
+	await fs.mkdir(logsDir, { recursive: true });
+	await fs.mkdir(".screenshots-auth", { recursive: true });
+	const repoRoot = path.resolve(process.cwd(), "..");
+
+	const onSignal = () => { killAllSync(); process.exit(130); };
+	process.on("SIGINT", onSignal);
+	process.on("SIGTERM", onSignal);
+
+	// Companions first, then the part server (started only if not already up).
+	for (const comp of part.companions || []) await ensureServer({ ...comp, dir: part.dir }, repoRoot, logsDir);
+	if (part.server) await ensureServer({ name: part.name, ...part.server, dir: part.dir }, repoRoot, logsDir);
+
+	let browser;
+	try {
+		browser = await chromium.launch({ headless: false });
+		const context = await browser.newContext();
+		const page = await context.newPage();
+		await page.goto(baseUrl + loginPath, { waitUntil: "load" }).catch((e) => console.warn(`goto warning: ${e.message}`));
+
+		console.log("\n" + "=".repeat(60));
+		console.log(`Complete the login in the browser window for part "${partName}".`);
+		console.log("Press Enter here once you're on a logged-in page.");
+		console.log("=".repeat(60));
+		await waitForEnter();
+
+		const url = page.url();
+		const verifiable = auth.success || auth.gateSignal;
+		if (verifiable) {
+			const ok =
+				verifySuccess(auth.success, url) &&
+				!(auth.gateSignal?.urlMatching && url.includes(auth.gateSignal.urlMatching));
+			if (ok) console.log(`Verified: on ${url}.`);
+			else console.warn(`Warning: could not verify a logged-in page (still on ${url}); saving session anyway.`);
+		} else {
+			console.log("No success/gateSignal configured — saving session without verification.");
+		}
+
+		const file = statePath(partName);
+		await context.storageState({ path: file });
+		console.log(`Saved session → ${file}`);
+		await context.close();
+	} finally {
+		if (browser) await browser.close();
+		await teardownServers(false);
+	}
+}
+
+// Resolve on the next line typed at stdin (Enter). Used only by --login.
+function waitForEnter() {
+	return new Promise((resolve) => {
+		process.stdin.resume();
+		process.stdin.once("data", () => { process.stdin.pause(); resolve(); });
+	});
 }
 
 // ============================================================================
@@ -603,14 +805,16 @@ async function capture(cfg, opts, matrix, repoRoot, logsDir) {
 	const browser = await chromium.launch();
 	try {
 		for (const { part, routes } of matrix.parts) {
-			const authOpts = await resolveAuthContextOptions(part); // SEAM(#4)
 			const baseUrl = part.server?.url?.replace(/\/$/, "") || "";
+			const auth = await resolveAuth(part, browser, baseUrl); // §5.4
+			const remedy = remedyFor(part);
 			for (const v of matrix.viewports) {
 				const context = await browser.newContext({
 					viewport: { width: v.width, height: v.height },
 					...(settleBase.disableAnimations ? { reducedMotion: "reduce" } : {}),
-					...authOpts,
+					...auth.contextOptions,
 				});
+				if (auth.cookies.length) await context.addCookies(auth.cookies);
 				if (settleBase.disableAnimations) {
 					await context.addInitScript((css) => {
 						const inject = () => {
@@ -625,7 +829,6 @@ async function capture(cfg, opts, matrix, repoRoot, logsDir) {
 				const page = await context.newPage();
 
 				for (const { route, nn, url, states } of routes) {
-					const fullUrl = baseUrl + url;
 					const routeSettle = { ...settleBase, ...(route.settle || {}) };
 					const label = `${part.name} ${nn}-${route.name} [${v.name}]`;
 					if (url.includes("__MISSING_")) {
@@ -633,12 +836,20 @@ async function capture(cfg, opts, matrix, repoRoot, logsDir) {
 						recordOnce(results, part.name, route, "error", [], "missing route param");
 						continue;
 					}
+					// Proactive gate: creds/session missing for this part → auth:true
+					// routes are gated (no PNG), everything else still captures (§5.4).
+					if (route.auth === true && auth.unmet) {
+						console.log(`  🔒 ${label}: gated — ${auth.unmet.reason}`);
+						recordOnce(results, part.name, route, "gated", [], auth.unmet.reason, auth.unmet.remedy);
+						continue;
+					}
+					const fullUrl = baseUrl + url + (auth.query ? (url.includes("?") ? "&" : "?") + auth.query : "");
 					try {
 						await navigateAndSettle(page, fullUrl, routeSettle, fullPage);
-						const gate = detectGate(part, page.url()); // SEAM(#4)
+						const gate = await detectGate(part, url, page.url(), page); // §5.8
 						if (gate) {
-							console.log(`  🔒 ${label}: gated (${gate})`);
-							recordOnce(results, part.name, route, "gated", []);
+							console.log(`  🔒 ${label}: gated — ${gate}`);
+							recordOnce(results, part.name, route, "gated", [], gate, remedy);
 							continue;
 						}
 						const file = baseFile(part.name, nn, route.name, v.name);
@@ -690,11 +901,12 @@ async function navigateAndSettle_afterActions(page, settle, _fullPage) {
 function findRec(results, partName, route) {
 	return results.find((r) => r.part === partName && r.path === route.path && r.name === route.name);
 }
-function recordOnce(results, partName, route, status, files, reason) {
+function recordOnce(results, partName, route, status, files, reason, remedy) {
 	let rec = findRec(results, partName, route);
 	if (!rec) { rec = { part: partName, path: route.path, name: route.name, status, files: [] }; results.push(rec); }
 	rec.status = status;
 	if (reason) rec.reason = reason;
+	if (remedy) rec.remedy = remedy;
 	for (const f of files) if (!rec.files.includes(f)) rec.files.push(f);
 }
 function addFile(results, partName, route, file) {
@@ -705,12 +917,76 @@ function addFile(results, partName, route, file) {
 }
 
 // ============================================================================
+// SECTION 9b — capture-manifest.json (§5.8)
+// ============================================================================
+//
+// Every run rewrites capture-manifest.json with one entry per (part, route):
+//   { part, route, name, status: "ok"|"gated"|"error", files, reason?, remedy? }
+//
+// MERGE semantics: a partial run (--part / --route / --viewport / --state) must
+// leave the manifest reflecting the UNION of the latest capture of each route,
+// so the gallery and stale-PNG detection never lose routes the run didn't touch.
+//   - Full run (no filters): manifest = exactly this run's results, so route
+//     renames/removals are reflected (stale PNGs get flagged).
+//   - Partial run: routes this run touched get their fresh record (with files
+//     unioned onto the previous record); every other route keeps its old record.
+
+const MANIFEST_FILE = "capture-manifest.json";
+
+async function readManifest() {
+	try {
+		const parsed = JSON.parse(await fs.readFile(MANIFEST_FILE, "utf8"));
+		return Array.isArray(parsed.runs) ? parsed : { runs: [] };
+	} catch {
+		return { runs: [] };
+	}
+}
+
+function isPartialRun(opts) {
+	return !!(opts.parts.length || opts.routes.length || opts.viewport || opts.states.length);
+}
+
+async function writeManifest(results, opts) {
+	const partial = isPartialRun(opts);
+	const key = (part, routePath) => `${part} ${routePath}`;
+	const old = await readManifest();
+	const oldByKey = new Map(old.runs.map((r) => [key(r.part, r.route), r]));
+	const touched = new Set(results.map((r) => key(r.part, r.path)));
+
+	const runs = [];
+	for (const r of results) {
+		const entry = { part: r.part, route: r.path, name: r.name, status: r.status, files: [...r.files] };
+		if (r.reason) entry.reason = r.reason;
+		if (r.remedy) entry.remedy = r.remedy;
+		if (partial) {
+			// Union prior files (e.g. a --viewport run only recaptured one viewport;
+			// keep the other viewport's PNG reference so the gallery stays complete).
+			const prev = oldByKey.get(key(r.part, r.path));
+			if (prev && Array.isArray(prev.files)) {
+				for (const f of prev.files) if (!entry.files.includes(f)) entry.files.push(f);
+			}
+		}
+		runs.push(entry);
+	}
+	if (partial) {
+		for (const r of old.runs) if (!touched.has(key(r.part, r.route))) runs.push(r);
+	}
+
+	const manifest = { generatedAt: new Date().toISOString(), runs };
+	await fs.writeFile(MANIFEST_FILE, JSON.stringify(manifest, null, 2) + "\n");
+	return manifest;
+}
+
+// ============================================================================
 // SECTION 10 — Stale PNG detection + prune (§5.7)
 // ============================================================================
 
-async function handleStale(matrix, results, prune) {
+// `expected` is drawn from the MERGED manifest (the union across runs), NOT just
+// this run's results — otherwise a --route-filtered run would report every PNG
+// outside its filter as stale.
+async function handleStale(matrix, manifest, prune) {
 	const expected = new Set();
-	for (const rec of results) for (const f of rec.files) expected.add(f);
+	for (const rec of manifest.runs) for (const f of rec.files || []) expected.add(f);
 
 	const stale = [];
 	for (const { part } of matrix.parts) {
@@ -743,7 +1019,7 @@ function printReport(matrix, results, wallMs) {
 	for (const { part } of matrix.parts) {
 		const recs = results.filter((r) => r.part === part.name);
 		const ok = recs.filter((r) => r.status === "ok").length;
-		const gated = recs.filter((r) => r.status === "gated").length; // SEAM(#4): always 0 until gate detection lands
+		const gated = recs.filter((r) => r.status === "gated").length;
 		const err = recs.filter((r) => r.status === "error").length;
 		console.log(`  ${part.name.padEnd(16)} ${ok} captured · ${gated} gated · ${err} errored`);
 	}
@@ -781,10 +1057,12 @@ async function runGallery(noGallery) {
 async function main() {
 	const opts = parseArgs(process.argv.slice(2));
 	if (opts.help) { console.log(USAGE); return; }
-	if (opts.login) loginStub(opts.login); // §5.5 SEAM(#4)
 
 	await loadSecrets();
 	const cfg = await loadConfig(opts.config);
+
+	if (opts.login) { await runLogin(cfg, opts.login); return; } // §5.5
+
 	const matrix = buildMatrix(cfg, opts);
 
 	if (matrix.parts.length === 0) fail("nothing to capture (filters matched no routes)");
@@ -806,7 +1084,8 @@ async function main() {
 	let results = [];
 	try {
 		results = await capture(cfg, opts, matrix, repoRoot, logsDir);
-		await handleStale(matrix, results, opts.prune);
+		const manifest = await writeManifest(results, opts); // §5.8 (merge on partial runs)
+		await handleStale(matrix, manifest, opts.prune);
 	} finally {
 		await teardownServers(opts.keepServers);
 	}
