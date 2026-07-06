@@ -4,6 +4,8 @@ A Claude Code skill that screenshots **every page of your web app** and turns th
 
 Built by [Jan Kuppens](https://kups.nl) · [Kups](https://kups.nl), an AI-first product studio.
 
+**ELI5:** Your AI builds your website, but it can't *see* it. This tool takes a picture of every page — even the ones behind a login — and puts them in one big photo album. You look through the album, write "this button is too small" under a photo, and hand the notes back to your AI. It fixes everything. No more clicking through your whole site to check what broke.
+
 ## The problem
 
 Agents are great at writing UI code and terrible at noticing it looks off. You only catch visual problems by actually looking at the app — every route, both breakpoints, logged in and logged out. So you click through screens, screenshot the broken ones, drop them in a chat, and describe what's wrong. Every. Single. Round.
