@@ -1,8 +1,23 @@
 # Auth setup — strategy taxonomy + setup dialogue
 
 How to get a part's authenticated routes to screenshot. Four strategies; pick
-one per part with the decision tree, fill its config block, put any secret in
-`.screenshots-auth/secrets.env` (never in the config), then verify.
+one per part with the decision tree, fill its config block, then have the **user**
+put any secret in `.screenshots-auth/secrets.env` (never in the config), then
+verify.
+
+**Secret-handling rule.** You never solicit, type, or echo a secret value. Ask
+only for the env-var *names*. When a strategy needs secrets, write a
+`secrets.env` template with the named keys left blank —
+
+```
+# .screenshots-auth/secrets.env — fill in the values, do not commit this file
+SR_WEB_USER=
+SR_WEB_PASSWORD=
+```
+
+— and ask the user to fill in the values themselves (edit the file, or paste them
+in). The plaintext must never pass through your output or the conversation. This
+keeps credentials out of the transcript entirely.
 
 ## Decision tree
 
@@ -31,8 +46,9 @@ whether a wall exists and pre-fill the dialogue:
    time a route whose final URL matches this is recorded **gated**, not failed.
 
 Then run the Q&A: which strategy → sign-in URL → (credentials) confirm the
-auto-detected selectors → ask for test credentials → write `secrets.env` →
-verify by logging in and confirming you land on real content.
+auto-detected selectors → ask for the env-var *names* → write the blank
+`secrets.env` template and ask the user to fill in the values → verify by logging
+in and confirming you land on real content.
 
 ## Strategy: `none`
 
@@ -81,8 +97,8 @@ that part's viewports.
 }
 ```
 
-- **`secrets.env`:** the two env vars named in `env` —
-  `SR_WEB_USER=...` and `SR_WEB_PASSWORD=...`.
+- **`secrets.env`:** the two env vars named in `env` — write them blank
+  (`SR_WEB_USER=` / `SR_WEB_PASSWORD=`) and have the user fill in the values.
 - **`success`:** post-login check. `urlNotMatching` fails if you're still on the
   login path; `urlMatching` (also supported) requires the landing URL to contain
   a substring. Omit → the tool can't verify and assumes success.
@@ -133,8 +149,8 @@ env and injected on every request.
 - **`inject.valueEnv`:** env-var **name** holding the secret (never the value).
 - **`inject.format`:** optional template; `{value}` is replaced with the env
   value (e.g. `"Bearer {value}"`). Omit → the raw value is used.
-- **`secrets.env`:** the one env var named in `valueEnv`, e.g.
-  `SR_API_TOKEN=...`.
+- **`secrets.env`:** the one env var named in `valueEnv` — write it blank
+  (`SR_API_TOKEN=`) and have the user fill in the value.
 
 ## Failure modes
 
@@ -152,6 +168,9 @@ comment field.
 
 - **Secrets never live in the config** — only env-var *names*. Actual values go
   in `.screenshots-auth/secrets.env`, which is gitignored.
+- **You never handle the secret value.** Write the `secrets.env` template with
+  blank values; the user fills them in. A credential must never appear in your
+  output or the conversation.
 - **`.screenshots-auth/` must stay gitignored.** The skill verifies the
   `.gitignore` line exists on every Capture run.
 - An unconfigured auth wall never fails a run: public routes capture, gated ones

@@ -45,6 +45,22 @@ environment variables, if set, override that file. The `auth` block in
 `node capture.mjs --login <part>` handles OAuth, magic-link, and SSO logins
 with a one-time headed browser session.
 
+## Security & scanner notes
+
+`capture.mjs` starts your dev server(s) with `spawn(command, { shell: true })`
+(SECTION 3). Static supply-chain scanners (e.g. Socket) flag any `shell: true`
+spawn as a risk signal. In this tool that is an **accepted, intrinsic false
+positive**: the command is one *you* wrote in your own `screenshots.config.jsonc`
+(`part.server.command`, e.g. `pnpm dev`) and it runs on your own machine. There
+is no untrusted or remote input in that path — starting an arbitrary framework
+dev server inherently requires a shell. The only child processes spawned are the
+servers you declare in the config and the local `generate.mjs` gallery step.
+
+Secrets are handled defensively: values never appear in the config or in any
+agent output — only env-var *names* live in `screenshots.config.jsonc`, and the
+plaintext lives solely in the gitignored `.screenshots-auth/secrets.env`, which
+you fill in yourself.
+
 ## What's committed vs generated
 
 Committed: `screenshots.config.jsonc`, `capture.mjs`, `generate.mjs`,
